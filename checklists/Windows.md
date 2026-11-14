@@ -1,71 +1,257 @@
-# Windows 10/11 — run the helper, then finish the image
+# Windows 10 / 11 Checklist
 
-Use only on an authorized competition/practice VM, under the current rules. Commands assume PowerShell is open in `Scripts/`. **Default audit is not apply.** Check boxes mean “verified on this image,” not “the script ran.” Windows 7/8.1 and old Windows 10 builds are not supported automatically.
+Work top to bottom. Tick a box only after you've checked it on **this** image.
 
-## 1. Start here
+> **Three rules that save you from penalties**
+> 1. **The README decides.** If it says a user, app, or service is needed, keep it.
+> 2. **Forensics first.** Answer every forensic question before deleting anything.
+> 3. **Never lock yourself out.** Keep at least one other working admin account.
 
-- [ ] **Run the helper first:** in elevated **64-bit Windows PowerShell 5.1**, run ` .\windows.ps1 ` (audit only). Keep the printed private report directory.
-- [ ] Take a VM snapshot; record the starting score and OS version (`winver`). Do not auto-reboot.
-- [ ] Read the desktop README. Record authorized users/admins, required apps, services, inbound ports and any special tasks. Never use a past year's username blacklist.
-- [ ] Open **every forensic question**. Save your evidence/answers before uninstalling, changing accounts/passwords or removing files.
-- [ ] Check whether domain/organization policy manages the system. Do not disable policy or antivirus to make a script work.
+---
 
-## 2. Let the helper do the applicable easy fixes
+## Step 1 — Get ready
 
-- [ ] Preview: ` .\windows.ps1 -Apply -WhatIf -Modules Base,Passwords,Defender,Audit `.
-- [ ] Run ` .\windows.ps1 -Apply `, answering each prompt against the README. Decline anything uncertain; use `-Modules` for one module at a time.
-- [ ] `Base`: verify UAC/secure desktop, blank-password restrictions, anonymous SAM restriction, autologon off, AutoRun/Remote Assistance restrictions, and screen inactivity policy are appropriate.
-- [ ] `Passwords`: confirm exact length, history, age and lockout values before accepting the generic proposed values. Existing passwords are **not** changed by policy configuration.
-- [ ] `Firewall`: use the VM console, supply required ports and verify all profiles. Existing broad allow rules are **not** removed automatically.
-- [ ] `Defender`: verify real-time protection/signatures. If another required antivirus is installed, do not enable a competing product blindly. Inspect exclusions manually.
-- [ ] `RDP`: keep required remote access; NLA/TLS are opt-in. Disable RDP only if explicitly not required.
-- [ ] `SMB`: confirm signing/SMB1 compatibility before applying. Preserve required shares and SMB2/3.
-- [ ] `Audit`: check success/failure audit policy and retained Security log. Do not clear logs.
-- [ ] Read `session.log`: any **FAILED**, skipped or unavailable setting remains unfinished. Recheck score and required functions after each module.
+- [ ] **Take a VM snapshot.**
+- [ ] **Write down the starting score and Windows version** (run `winver`).
+- [ ] **Open the right PowerShell:** Start → type `Windows PowerShell` → right-click → **Run as administrator**. (Not "PowerShell 7".)
+- [ ] **Go to the scripts folder** and allow scripts for this window only:
 
-## 3. Users and groups — still needs your decisions
+  ```powershell
+  cd PATH\TO\scripts
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+  ```
 
-- [ ] Compare `Get-LocalUser` with the README. Inspect disabled as well as enabled accounts and suspicious extra accounts.
-- [ ] Compare local Administrators (`S-1-5-32-544`) and Remote Desktop Users (`S-1-5-32-555`) memberships. Use SID-based tools on localized Windows; do not assume English group names.
-- [ ] Remove unauthorized **admin/group memberships**, preserving another tested administrator. The helper does not demote admins automatically.
-- [ ] Create any missing authorized users/groups and required memberships. These are never inferred by the script.
-- [ ] Change weak/blank passwords only for authorized accounts that need it; do not reuse one published password for everyone. Preserve required service credentials.
-- [ ] Review password-never-expires/password-not-required flags and required next-login password changes.
-- [ ] Confirm Guest disabled if prohibited; do not arbitrarily disable built-in Administrator or the current user.
-- [ ] **Account disable ≠ account deletion.** The helper disables selected users, preserving evidence. If the README/scored outcome requires actual removal, complete forensics, validate another login and remove the exact account manually with an appropriate backup. Do not assume disabling earns removal points.
+- [ ] **Run the audit script.** It only reads — nothing changes.
 
-## 4. Applications, updates and prohibited files
+  ```powershell
+  .\windows.ps1
+  ```
 
-- [ ] Install approved Windows updates, then check again. The Windows helper configures/checks updates but does **not** install missing OS updates.
-- [ ] Update every required browser, office/editor tool and other app (for example Chrome/Firefox/Notepad++ when required). These third-party updates are manual.
-- [ ] Use Settings → Apps / Programs and Features to review installed apps. Remove only prohibited tools/games/scareware after checking forensics and dependencies. “Security tool” does not automatically mean prohibited.
-- [ ] Review optional features: SMB1 client, Telnet, FTP, IIS and legacy components. Remove/disable only if not required; the helper does not uninstall these features.
-- [ ] Search user folders for prohibited media/archives and credentials, with hidden files visible. **Review first; do not recursively delete by extension.** Example filename-only search:
+  Write down the report folder it prints at the top.
+
+- [ ] **Read the README and write down:**
+  - every authorized user, and which ones are admins
+  - required apps (browsers, editors, etc.) and services
+  - required open ports (e.g. `3389/tcp` for Remote Desktop)
+  - any special tasks ("create group X", "add user Y")
+- [ ] **Answer every forensic question and save the answers.**
+
+---
+
+## Step 2 — Let the script do the easy fixes
+
+Preview what it would change (changes nothing):
 
 ```powershell
-Get-ChildItem C:\Users -Recurse -Force -File -ErrorAction SilentlyContinue |
-    Where-Object Extension -in '.mp3','.mp4','.avi','.torrent' |
-    Select-Object FullName,Length
+.\windows.ps1 -Apply -WhatIf
 ```
 
-- [ ] Review shared folders and NTFS/share permissions. Remove unintended broad access without breaking required shares.
-- [ ] Configure required browser protections, proxy settings and app-specific security according to README. The helper does not secure every app.
+Then run it for real. Type `READY` at the start, then type `YES` (capitals) for each change you want. Anything else skips it.
 
-## 5. Services, persistence and local policy
+```powershell
+.\windows.ps1 -Apply
+```
 
-- [ ] Match running/listening services to the README. Check owning process and path, not just the displayed name.
-- [ ] Only after confirming they are unnecessary, use `Services` or Services.msc for specific FTP/Telnet/Remote Registry/SSDP/etc. Do not disable networking, DNS, firewall, Defender, update or scoring services generically.
-- [ ] Inspect scheduled tasks, startup entries, Run keys, Startup folders, unusual service executables and remote-control software. Preserve evidence before removal.
-- [ ] Review local user-right assignments (who can log on locally/RDP, back up, debug, act as OS). These are **manual** and role-specific.
-- [ ] Review Security Options not handled by the baseline: LAN Manager/NTLM compatibility, anonymous shares, session/security signing requirements and required network authentication. Do not break legacy/required clients for a guessed point.
-- [ ] Run an approved antivirus scan when permitted; review findings and exclusions. The helper does not perform a full malware investigation or guarantee cleanup.
+Want to go slower? Pick modules:
 
-## 6. Final verification
+```powershell
+.\windows.ps1 -Apply -Modules Base,Passwords,Defender,Audit
+```
 
-- [ ] Re-run ` .\windows.ps1 ` in audit mode; compare with the first report and exact README requirements.
-- [ ] Confirm all forensic answers are saved, required apps open, authorized users can log in and required ports/services work.
-- [ ] Test a **new** RDP/other remote session before closing an existing one.
-- [ ] Check score, penalties and any failed module. Fix the actual evidence; never modify scoring internals.
-- [ ] Reboot only if allowed/needed, from the console, then repeat login/service/firewall/score checks. Preserve private logs securely.
+**How to answer each prompt:**
 
-**Testing limit:** the helper passed syntax/static checks and isolated tests, but has not been tested inside a Windows competition VM. Test apply on a snapshot; it is not a guaranteed full-score solution.
+| Module | Type `YES` when… | Skip when… |
+|---|---|---|
+| `Base` | Almost always | README needs auto-login or Remote Assistance |
+| `Passwords` | README gives no specific values | README gives different values → set them in `secpol.msc` |
+| `Firewall` | You're at the VM console. Enter every required port (e.g. `3389/tcp`) | You're connected over Remote Desktop |
+| `Defender` | No other antivirus is required | README requires a different antivirus |
+| `RDP` — 1st prompt (NLA) | Always | — |
+| `RDP` — 2nd prompt (disable RDP) | README does **not** need Remote Desktop | README needs Remote Desktop |
+| `SMB` | Almost always | README mentions old devices / SMB1 |
+| `Audit` | Always | — |
+| `Updates` | Always | — |
+| `Users` | Guest prompt: yes. Then type **one** unauthorized user to disable | Blank to skip |
+| `Services` | Type **one** forbidden service from the list shown | Blank if unsure |
+
+`Users` and `Services` handle one item per run. Repeat with `-Modules Users` (etc.) for more.
+
+- [ ] **Read the end of the output.** Any `FAILED` warning is **not** done — fix it by hand.
+- [ ] **Check the score** went up and required apps still work.
+
+---
+
+## Step 3 — Users and groups
+
+Goal: the accounts on the machine match the README **exactly**.
+GUI option: run `lusrmgr.msc` (Pro/Enterprise only).
+
+- [ ] **List all users** (look at disabled ones too):
+
+  ```powershell
+  Get-LocalUser
+  ```
+
+- [ ] **Delete users not in the README:**
+
+  ```powershell
+  Remove-LocalUser -Name USERNAME
+  ```
+
+- [ ] **List admins:**
+
+  ```powershell
+  Get-LocalGroupMember -Group Administrators
+  ```
+
+- [ ] **Remove admin from users who shouldn't have it:**
+
+  ```powershell
+  Remove-LocalGroupMember -Group Administrators -Member USERNAME
+  ```
+
+- [ ] **Give admin to users who should have it:**
+
+  ```powershell
+  Add-LocalGroupMember -Group Administrators -Member USERNAME
+  ```
+
+- [ ] **Check Remote Desktop Users the same way:** `Get-LocalGroupMember -Group "Remote Desktop Users"`
+- [ ] **Create any users or groups the README asks for:**
+
+  ```powershell
+  New-LocalUser -Name USERNAME -Password (Read-Host -AsSecureString)
+  New-LocalGroup -Name GROUPNAME
+  Add-LocalGroupMember -Group GROUPNAME -Member USERNAME
+  ```
+
+- [ ] **Fix weak or blank passwords** for authorized users (it will prompt):
+
+  ```powershell
+  net user USERNAME *
+  ```
+
+  Use a different strong password for each. Don't change your own unless the README says to.
+
+- [ ] **Turn off "password never expires":**
+
+  ```powershell
+  Get-LocalUser | Select-Object Name, PasswordExpires
+  Set-LocalUser -Name USERNAME -PasswordNeverExpires $false
+  ```
+
+  A blank `PasswordExpires` means it never expires.
+
+- [ ] **Turn off "password not required":**
+
+  ```powershell
+  Get-LocalUser | Where-Object PasswordRequired -eq $false
+  net user USERNAME /passwordreq:yes
+  ```
+
+- [ ] **Guest is disabled** (the script does this if you said `YES`).
+- [ ] **Don't disable** the built-in Administrator or your own account unless the README says to.
+
+---
+
+## Step 4 — Policies
+
+Open `secpol.msc` (Local Security Policy).
+
+- [ ] **Account Policies → Password Policy:** match the README. If it gives nothing, the script's values are fine.
+- [ ] **Account Policies → Account Lockout Policy:** match the README.
+- [ ] **Local Policies → User Rights Assignment.** Check who's listed for:
+  - Access this computer from the network
+  - Allow log on through Remote Desktop Services
+  - Act as part of the operating system → should be **empty**
+  - Debug programs → **Administrators** only
+  - Back up / restore files and directories → **Administrators** (and Backup Operators)
+
+  Remove `Everyone`, `Guest`, or unauthorized users from these.
+
+- [ ] **Local Policies → Security Options.** Common ones:
+  - Accounts: Rename administrator / guest account → only if README asks
+  - Interactive logon: Do not display last user name → **Enabled**
+  - Network security: LAN Manager authentication level → **Send NTLMv2 response only. Refuse LM & NTLM**
+  - Network access: Do not allow anonymous enumeration of SAM accounts and shares → **Enabled**
+
+  Don't change one that would break something the README needs.
+
+---
+
+## Step 5 — Apps, services and files
+
+### Software
+
+- [ ] **Install Windows updates:** Settings → **Windows Update** → Check for updates. Repeat until nothing is left.
+- [ ] **Update required apps** (Firefox, Chrome, Notepad++, etc.) from inside each app or its website.
+- [ ] **Uninstall prohibited apps** (hacking tools, games, "cleaners", scareware): run `appwiz.cpl`. Check forensics first.
+- [ ] **Turn off unneeded Windows features:** run `optionalfeatures.exe` and untick, if not required:
+  - SMB 1.0/CIFS File Sharing Support
+  - Telnet Client / TFTP Client
+  - Internet Information Services (IIS) / FTP Server
+- [ ] **Browser settings:** turn on pop-up blocking and SmartScreen / Safe Browsing; check proxy settings.
+
+### Services
+
+- [ ] **Open `services.msc`.** For each service below, if the README doesn't need it: **Stop** it and set Startup type to **Disabled**.
+  - Telnet, FTP (Microsoft FTP Service), Remote Registry
+  - SSDP Discovery, UPnP Device Host
+  - World Wide Web Publishing (IIS), SNMP
+  - Remote Access / Routing and Remote Access
+- [ ] **Don't touch** networking, DNS Client, Windows Firewall, Defender, Windows Update, or the scoring service.
+- [ ] **Look for odd services:** strange names, or a path pointing at a user folder or `Temp`.
+
+### Shares
+
+- [ ] **List shares:** `Get-SmbShare`
+- [ ] **Remove shares the README doesn't need:** `Remove-SmbShare -Name SHARENAME`. Leave `ADMIN$`, `C$`, and `IPC$` alone.
+
+### Files
+
+- [ ] **Find media files** (lists them, doesn't delete):
+
+  ```powershell
+  Get-ChildItem C:\Users -Recurse -Force -File -ErrorAction SilentlyContinue |
+      Where-Object Extension -in '.mp3', '.mp4', '.avi', '.mov', '.wav', '.flac', '.torrent' |
+      Select-Object FullName, Length
+  ```
+
+  Check forensics, then delete each file.
+
+- [ ] **Look for plaintext password files and odd `.exe`/`.bat`/`.ps1` files** in user folders.
+
+### Backdoors
+
+Check each place. Remove anything malicious; leave anything you don't understand and ask.
+
+- [ ] **Scheduled tasks:** run `taskschd.msc`, look for tasks running scripts or programs from user folders.
+- [ ] **Startup apps:** Task Manager → **Startup** tab.
+- [ ] **Startup folders:** press Win+R, run `shell:startup`, then `shell:common startup`.
+- [ ] **Hosts file:** `notepad C:\Windows\System32\drivers\etc\hosts` — no redirects for real websites.
+- [ ] **Remote-control software** (TeamViewer, VNC, AnyDesk, etc.) that the README doesn't need → uninstall.
+- [ ] **Run a Defender scan:**
+
+  ```powershell
+  Start-MpScan -ScanType QuickScan
+  ```
+
+  Then check Windows Security → Virus & threat protection → **Exclusions** and remove ones that look wrong.
+
+---
+
+## Step 6 — Finish
+
+- [ ] **Re-run the audit** and compare it to the first one: `.\windows.ps1`
+- [ ] **Authorized users can still log in.**
+- [ ] **If Remote Desktop is required**, test a **new** RDP session before closing the current one.
+- [ ] **Required apps and services still work.**
+- [ ] **Forensic answers are saved.**
+- [ ] **Score is up and there are no penalties.**
+- [ ] **Reboot only if needed**, then check the score again.
+
+---
+
+**The script doesn't do these for you:** decide who's authorized, delete users, create users, remove admins, install updates, uninstall apps, delete files, or set user rights.
+
+**Testing limit:** passed syntax/static checks and isolated tests, but not run inside a Windows competition VM. Snapshot first. Windows 7/8.1 aren't supported.

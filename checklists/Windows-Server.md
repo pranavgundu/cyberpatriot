@@ -1,64 +1,238 @@
-# Windows Server — run the helper, then secure the required roles
+# Windows Server Checklist
 
-For an authorized VM only. Use current rules and image README. Commands assume elevated **64-bit Windows PowerShell 5.1**, in `Scripts/`, with **both** `windows-server.ps1` and `windows.ps1` present. Designed for modern standalone/member servers, **not automatic domain-controller hardening**.
+Work top to bottom. Tick a box only after you've checked it on **this** image.
+Built for Server 2016 / 2019 / 2022 (standalone or domain member). Server 2008 isn't supported.
 
-## 1. Start here
+> **Three rules that save you from penalties**
+> 1. **The README decides.** Servers run roles (web, file, DNS…) on purpose. Installed ≠ forbidden.
+> 2. **Forensics first.** Answer every forensic question before deleting anything.
+> 3. **Never lock yourself out.** Keep the VM console and at least one other working admin.
 
-- [ ] **Run the helper first:** ` .\windows-server.ps1 ` (audit only). Save its printed report directory.
-- [ ] Snapshot the VM; record OS version, score and whether this is standalone, a domain member or a **domain controller**.
-- [ ] Read README and record authorized admins/users, domain/local identities, required roles, service accounts, apps, shares, ports and special tasks.
-- [ ] Complete every forensic question before altering accounts, services, files, scheduled tasks or application data.
-- [ ] If this is a domain controller, **stop before apply**. The helper refuses it. Use the role-specific manual/domain policy checklist with your coach/mentor; never attempt to turn the DC into a workstation.
+---
 
-## 2. Apply only role-compatible baseline modules
+## Step 1 — Get ready
 
-- [ ] Preview ` .\windows-server.ps1 -Apply -WhatIf -Modules Base,Passwords,Firewall,Audit `.
-- [ ] Apply one module at a time, for example ` .\windows-server.ps1 -Apply -Modules Base,Audit `. Review score and required services after each.
-- [ ] `Base`: confirm anonymous access restrictions/UAC/autologon/Remote Assistance/AutoRun/session-lock settings fit the server role.
-- [ ] `Passwords`: only **local** policy is changed. Generic length/history/age/lockout values must match README; domain policy may override them. No domain passwords/accounts are modified.
-- [ ] `Firewall`: use console; preserve required AD/DNS/DHCP/SMB/IIS/SQL/management/other ports **as applicable**, not a universal copied port list. Review overly broad existing allow rules.
-- [ ] `RDP`: preserve required admin access and test a fresh login after NLA/TLS changes. Do not disable required RDP/WinRM.
-- [ ] `SMB`: preserve required shares/SMB2/3. Confirm client compatibility before requiring signing or disabling SMB1. Encryption/share-level rules remain manual.
-- [ ] `Defender`: verify role-compatible antivirus, signatures, exclusions and tamper/central management. Server may have a different approved AV.
-- [ ] `Audit`: confirm effective advanced audit settings and log retention. Do not clear logs.
-- [ ] Read all failures/skips. A successful script exit does not prove role-specific security or correct GPO precedence.
+- [ ] **Take a VM snapshot.**
+- [ ] **Write down the starting score and Windows version** (run `winver`).
+- [ ] **Find out if this is a domain controller:** Server Manager → Local Server. If **Active Directory Domain Services** is installed, it's a DC → the script only audits. Skip Step 2 and do everything by hand.
+- [ ] **Open the right PowerShell:** Start → type `Windows PowerShell` → right-click → **Run as administrator**.
+- [ ] **Go to the scripts folder** and allow scripts for this window only. `windows.ps1` must be in the same folder.
 
-## 3. Local users, groups and service identities
+  ```powershell
+  cd PATH\TO\scripts
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+  ```
 
-- [ ] Compare local users, Administrators, Remote Desktop Users and service logon identities with README. Distinguish `SERVER\user` from `DOMAIN\user`.
-- [ ] Remove unauthorized memberships; create required local groups/users manually. Do not delete a domain identity or service account based on a local-user finding.
-- [ ] Keep another tested administrator and console access. The helper protects current/built-in accounts and the last enabled local admin, but that is not proof another admin can actually log in.
-- [ ] Review weak passwords, password-not-required/never-expires flags and specific next-logon requirements without breaking unattended services.
-- [ ] If an unauthorized account must be **removed**, understand that the helper only disables it. Preserve forensic evidence and profile/service dependencies before exact manual removal.
-- [ ] Review “log on as a service,” “log on as a batch job,” local/RDP logon, backup/debug privileges and deny rights. These are manual/role-specific; broad deny rules can block legitimate domain administrators.
+- [ ] **Run the audit script.** It only reads — nothing changes.
 
-## 4. Required roles — do not skip this section
+  ```powershell
+  .\windows-server.ps1
+  ```
 
-- [ ] Inventory roles with `Get-WindowsFeature` if available; compare running services/listeners to required roles. **Installed ≠ prohibited.**
-- [ ] **File server:** verify each required share path, share and NTFS permissions, authorized groups, no unintended anonymous/guest access, protocol/signing requirements. Test as a normal authorized user.
-- [ ] **IIS/web:** verify required sites/app pools/bindings, TLS/certificates, authentication, directory listing, default content and folder permissions. Keep required web functionality.
-- [ ] **FTP:** distinguish required secure transfer from prohibited FTP; verify authentication, allowed directories, anonymous access and encryption settings. The helper only offers an explicit service stop, not FTP site security.
-- [ ] **DNS/DHCP:** check intended interfaces, scopes, forwarders and access rules; preserve necessary name resolution/address assignment. Do not disable these roles to reduce listeners.
-- [ ] **Database:** verify required listeners, credentials, local/remote access, service identity, privileges, updates and backups using the database's own tools. No database hardening is automated here.
-- [ ] **AD/domain controller (manual only):** use an authorized lab plan for account policy, privileged groups, delegation, GPO and required AD services. Do not apply this standalone/member-server baseline to a DC.
-- [ ] **Routing/RRAS/NPS/printing/other:** apply README-specific rules; these may legitimately require services that a workstation checklist would disable.
+  Write down the report folder it prints at the top.
 
-## 5. Updates, applications, files and persistence
+- [ ] **Read the README and write down:**
+  - every authorized user, and which ones are admins
+  - required **roles** (file server, IIS, FTP, DNS, DHCP, database, print…)
+  - required open ports (see the table below)
+  - service accounts that must keep working
+  - any special tasks
+- [ ] **Answer every forensic question and save the answers.**
 
-- [ ] Apply approved OS updates via the required WSUS/management/update channel. The helper preserves domain update policy and does not install updates or reboot.
-- [ ] Update required browsers, runtimes, editors and role software manually. Verify role compatibility before major upgrades.
-- [ ] Remove only expressly prohibited apps/features after forensics. Do not bulk-remove IIS/FTP/SMB/printing/routing/remote management.
-- [ ] Search user and application data locations for prohibited media, insecure credential files and suspicious binaries without deleting evidence or required content blindly.
-- [ ] Inspect scheduled tasks, startup paths, services and executable locations for persistence and unexpected identities. The helper only inventories, not fully remediates them.
-- [ ] Review Defender/AV findings and exceptions; perform an approved scan if appropriate. Do not disable AV to install an unsigned “fix.”
-- [ ] Inspect local security options and GPO effective results (`gpresult /r`; detailed reports as permitted). Local registry writes do not override every domain policy.
+**Common ports for required roles:**
 
-## 6. Final verification
+| Role | Ports to allow |
+|---|---|
+| Remote Desktop | `3389/tcp` |
+| File sharing (SMB) | `445/tcp` |
+| Web (IIS) | `80/tcp 443/tcp` |
+| FTP | `21/tcp` |
+| DNS | `53/tcp 53/udp` |
+| DHCP | `67/udp` |
+| SQL Server | `1433/tcp` |
 
-- [ ] Re-run ` .\windows-server.ps1 ` (audit). Compare before/after and every recorded requirement.
-- [ ] Test required roles **from the expected client**, not only localhost: file share, website, DNS lookup, database, remote admin, etc.
-- [ ] Confirm authorized user/service logons and a fresh administrator session. Verify no service was silently broken by credentials/signing/firewall changes.
-- [ ] Verify forensic answers, score and penalties; leave scoring engine/services untouched.
-- [ ] Reboot only if authorized/required, using console access, then retest all roles and score. Protect report/backups.
+---
 
-**Support and testing limit:** intended for modern standalone/member Server 2016/2019/2022 systems with the required cmdlets. Server 2008 is not supported; domain controllers are audit-only. Syntax/static checks and isolated tests passed, but no Windows Server competition VM has been used to verify apply. Test on a snapshot; this is not a guaranteed full-score solution.
+## Step 2 — Let the script do the easy fixes
+
+Skip this step on a domain controller.
+
+Preview what it would change (changes nothing):
+
+```powershell
+.\windows-server.ps1 -Apply -WhatIf
+```
+
+Then run it **a few modules at a time**, checking the score and roles after each. Type `READY` at the start, then `YES` (capitals) for each change you want.
+
+```powershell
+.\windows-server.ps1 -Apply -Modules Base,Audit
+.\windows-server.ps1 -Apply -Modules Passwords,Defender
+.\windows-server.ps1 -Apply -Modules Firewall,RDP,SMB
+.\windows-server.ps1 -Apply -Modules Updates,Users,Services
+```
+
+**How to answer each prompt:**
+
+| Module | Type `YES` when… | Skip when… |
+|---|---|---|
+| `Base` | Almost always | README needs auto-login or Remote Assistance |
+| `Passwords` | README gives no specific values | README gives different values → set them in `secpol.msc` |
+| `Firewall` | You're at the VM console. Enter **every** port your roles need (table above) | You're connected over Remote Desktop |
+| `Defender` | No other antivirus is required | README requires a different antivirus |
+| `RDP` — 1st prompt (NLA) | Always | — |
+| `RDP` — 2nd prompt (disable RDP) | README does **not** need Remote Desktop | README needs Remote Desktop (most servers do) |
+| `SMB` | No old clients need SMB1 | README mentions old devices / SMB1 |
+| `Audit` | Always | — |
+| `Updates` | Always | — |
+| `Users` | Guest prompt: yes. Then type **one** unauthorized user to disable | Blank to skip |
+| `Services` | Type **one** forbidden service from the list | It belongs to a required role (e.g. `W3SVC` for IIS, `Spooler` for printing) |
+
+- [ ] **Read the end of each run.** Any `FAILED` warning is **not** done — fix it by hand.
+- [ ] **After each run, check the score** and that every required role still works.
+
+---
+
+## Step 3 — Users and groups
+
+Goal: the accounts on the machine match the README **exactly**.
+On a domain controller, use **`dsa.msc`** (Active Directory Users and Computers) instead of the commands below.
+
+- [ ] **List all users** (look at disabled ones too): `Get-LocalUser`
+- [ ] **Delete users not in the README:**
+
+  ```powershell
+  Remove-LocalUser -Name USERNAME
+  ```
+
+  Don't delete a **service account** that a role runs as — check `services.msc` → Log On As column first.
+
+- [ ] **List admins:** `Get-LocalGroupMember -Group Administrators`
+- [ ] **Remove admin from users who shouldn't have it:**
+
+  ```powershell
+  Remove-LocalGroupMember -Group Administrators -Member USERNAME
+  ```
+
+- [ ] **Give admin to users who should have it:**
+
+  ```powershell
+  Add-LocalGroupMember -Group Administrators -Member USERNAME
+  ```
+
+- [ ] **Check Remote Desktop Users the same way:** `Get-LocalGroupMember -Group "Remote Desktop Users"`
+- [ ] **`SERVER\user` and `DOMAIN\user` are different accounts.** Don't delete a domain account because of a local finding.
+- [ ] **Create any users or groups the README asks for:**
+
+  ```powershell
+  New-LocalUser -Name USERNAME -Password (Read-Host -AsSecureString)
+  New-LocalGroup -Name GROUPNAME
+  Add-LocalGroupMember -Group GROUPNAME -Member USERNAME
+  ```
+
+- [ ] **Fix weak or blank passwords** for authorized users: `net user USERNAME *`. Don't change a service account's password unless you also update the service.
+- [ ] **Turn off "password never expires"** (except service accounts the README says to leave):
+
+  ```powershell
+  Get-LocalUser | Select-Object Name, PasswordExpires
+  Set-LocalUser -Name USERNAME -PasswordNeverExpires $false
+  ```
+
+- [ ] **Turn off "password not required":** `net user USERNAME /passwordreq:yes`
+
+---
+
+## Step 4 — Policies
+
+Open `secpol.msc`. On a domain controller or domain member, also check `gpmc.msc` — domain policy overrides local policy.
+
+- [ ] **Account Policies → Password Policy / Account Lockout Policy:** match the README.
+- [ ] **Local Policies → User Rights Assignment.** Check who's listed for:
+  - Allow log on through Remote Desktop Services
+  - Log on as a service / Log on as a batch job — **keep** role service accounts here
+  - Act as part of the operating system → should be **empty**
+  - Debug programs → **Administrators** only
+
+  Remove `Everyone`, `Guest`, or unauthorized users. Don't add broad "Deny" rules.
+
+- [ ] **Local Policies → Security Options:** same as Windows 10 (don't show last user name, NTLMv2 only, no anonymous SAM enumeration). Check that required clients still connect afterward.
+- [ ] **Check what policy is actually applied:** `gpresult /r`
+
+---
+
+## Step 5 — Roles (don't skip this)
+
+- [ ] **List installed roles:**
+
+  ```powershell
+  Get-WindowsFeature | Where-Object Installed
+  ```
+
+- [ ] **Remove roles the README doesn't need** via Server Manager → Manage → Remove Roles and Features.
+
+For each role you **keep**, go through its box:
+
+- [ ] **File server:** for each share, check share permissions **and** NTFS permissions (right-click folder → Properties → Security). No `Everyone` full control. No guest/anonymous access. Test with a normal user.
+- [ ] **IIS (web):** open `inetmgr`. Turn off Directory Browsing. Remove default/sample sites if not needed. Check authentication (no anonymous on admin pages) and HTTPS bindings.
+- [ ] **FTP:** in `inetmgr`, turn off anonymous authentication, require SSL if possible, check which folders are exposed.
+- [ ] **DNS:** open `dnsmgmt.msc`. Turn off zone transfers or limit them to listed servers. Check forwarders.
+- [ ] **DHCP:** open `dhcpmgmt.msc`. Check scopes and that it only serves the right network.
+- [ ] **Database (SQL Server, MySQL):** strong `sa`/root password, no blank passwords, remote access only if needed, update it.
+- [ ] **Print server:** keep the Spooler running; remove unknown printers/drivers.
+- [ ] **Domain controller:** password policy in `gpmc.msc` → Default Domain Policy; check Domain Admins / Enterprise Admins / Schema Admins membership in `dsa.msc`.
+
+---
+
+## Step 6 — Apps, services and files
+
+### Software
+
+- [ ] **Install Windows updates:** Settings → **Windows Update** → Check for updates (or `sconfig` → option 6 on Server Core). Repeat until nothing is left.
+- [ ] **Update required apps** (browsers, runtimes, role software).
+- [ ] **Uninstall prohibited apps:** run `appwiz.cpl`. Check forensics first.
+
+### Services
+
+- [ ] **Open `services.msc`.** Stop and disable services that **no required role** needs (Telnet, Remote Registry, SNMP, SSDP, UPnP…).
+- [ ] **Don't touch** networking, DNS Client, Firewall, Defender, Windows Update, the scoring service, or anything a required role uses.
+- [ ] **Look for odd services:** strange names, or a path pointing at a user folder or `Temp`.
+
+### Files
+
+- [ ] **Find media files** (lists them, doesn't delete):
+
+  ```powershell
+  Get-ChildItem C:\Users, C:\inetpub -Recurse -Force -File -ErrorAction SilentlyContinue |
+      Where-Object Extension -in '.mp3', '.mp4', '.avi', '.mov', '.wav', '.flac', '.torrent' |
+      Select-Object FullName, Length
+  ```
+
+  Check forensics, then delete each file. Don't delete real website content.
+
+- [ ] **Look for plaintext password files** and odd `.exe`/`.bat`/`.ps1` files in user and share folders.
+
+### Backdoors
+
+- [ ] **Scheduled tasks:** `taskschd.msc` — tasks running scripts from user folders or `Temp`.
+- [ ] **Startup:** Task Manager → Startup, `shell:startup`, `shell:common startup`.
+- [ ] **Hosts file:** `notepad C:\Windows\System32\drivers\etc\hosts`
+- [ ] **Remote-control software** (TeamViewer, VNC, AnyDesk…) the README doesn't need → uninstall.
+- [ ] **Run a Defender scan:** `Start-MpScan -ScanType QuickScan`, then check Exclusions in Windows Security.
+
+---
+
+## Step 7 — Finish
+
+- [ ] **Re-run the audit** and compare: `.\windows-server.ps1`
+- [ ] **Test every required role from a client**, not just the server itself (open the website, the share, a DNS lookup…).
+- [ ] **Test a new Remote Desktop session** before closing the current one.
+- [ ] **Authorized users and service accounts still log in.**
+- [ ] **Forensic answers are saved.**
+- [ ] **Score is up and there are no penalties.**
+- [ ] **Reboot only if needed**, then retest roles and score.
+
+---
+
+**The script doesn't do these for you:** decide who's authorized, delete users, create users, remove admins, configure roles, install updates, uninstall apps, delete files, or set user rights. Domain controllers are audit-only.
+
+**Testing limit:** passed syntax/static checks and isolated tests, but not run inside a Windows Server competition VM. Snapshot first.
