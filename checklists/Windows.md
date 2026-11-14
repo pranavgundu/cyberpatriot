@@ -9,19 +9,28 @@ Work top to bottom. Tick a box only after you've checked it on **this** image.
 
 ---
 
-## Step 1 — Get ready
+## Step 1: Get ready
 
 - [ ] **Take a VM snapshot.**
 - [ ] **Write down the starting score and Windows version** (run `winver`).
-- [ ] **Open the right PowerShell:** Start → type `Windows PowerShell` → right-click → **Run as administrator**. (Not "PowerShell 7".)
-- [ ] **Go to the scripts folder** and allow scripts for this window only:
+- [ ] **Open Windows PowerShell as administrator:** open Start, type `Windows PowerShell`, right-click it, and select **Run as administrator**. Do not use PowerShell 7.
+- [ ] **Download the script from GitHub.** No Git or clone is needed:
 
   ```powershell
-  cd PATH\TO\scripts
+  New-Item -ItemType Directory -Force -Path "$HOME\cyberpatriot-scripts" | Out-Null
+  Set-Location "$HOME\cyberpatriot-scripts"
+  Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/pranavgundu/cyberpatriot/main/scripts/windows.ps1' -OutFile windows.ps1
+  ```
+
+  If the download returns `404`, use the [private repository download instructions](README.md#private-repository-downloads) instead. Review `windows.ps1` before running it as administrator. Use this folder for all script commands below.
+
+- [ ] **Allow scripts for this PowerShell window only:**
+
+  ```powershell
   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
   ```
 
-- [ ] **Run the audit script.** It only reads — nothing changes.
+- [ ] **Run the audit script.** It reads system settings and saves a report without changing those settings.
 
   ```powershell
   .\windows.ps1
@@ -38,7 +47,7 @@ Work top to bottom. Tick a box only after you've checked it on **this** image.
 
 ---
 
-## Step 2 — Let the script do the easy fixes
+## Step 2: Run the script fixes
 
 Preview what it would change (changes nothing):
 
@@ -60,28 +69,28 @@ Want to go slower? Pick modules:
 
 **How to answer each prompt:**
 
-| Module | Type `YES` when… | Skip when… |
+| Module | Type `YES` when | Skip when |
 |---|---|---|
 | `Base` | Almost always | README needs auto-login or Remote Assistance |
-| `Passwords` | README gives no specific values | README gives different values → set them in `secpol.msc` |
+| `Passwords` | README gives no specific values | README gives different values; set them in `secpol.msc` |
 | `Firewall` | You're at the VM console. Enter every required port (e.g. `3389/tcp`) | You're connected over Remote Desktop |
 | `Defender` | No other antivirus is required | README requires a different antivirus |
-| `RDP` — 1st prompt (NLA) | Always | — |
-| `RDP` — 2nd prompt (disable RDP) | README does **not** need Remote Desktop | README needs Remote Desktop |
+| `RDP`, first prompt (NLA) | Always | No usual reason to skip |
+| `RDP`, second prompt (disable RDP) | README does **not** need Remote Desktop | README needs Remote Desktop |
 | `SMB` | Almost always | README mentions old devices / SMB1 |
-| `Audit` | Always | — |
-| `Updates` | Always | — |
+| `Audit` | Always | No usual reason to skip |
+| `Updates` | Always | No usual reason to skip |
 | `Users` | Guest prompt: yes. Then type **one** unauthorized user to disable | Blank to skip |
 | `Services` | Type **one** forbidden service from the list shown | Blank if unsure |
 
 `Users` and `Services` handle one item per run. Repeat with `-Modules Users` (etc.) for more.
 
-- [ ] **Read the end of the output.** Any `FAILED` warning is **not** done — fix it by hand.
+- [ ] **Read the end of the output.** Any `FAILED` warning is **not** done. Fix it by hand.
 - [ ] **Check the score** went up and required apps still work.
 
 ---
 
-## Step 3 — Users and groups
+## Step 3: Users and groups
 
 Goal: the accounts on the machine match the README **exactly**.
 GUI option: run `lusrmgr.msc` (Pro/Enterprise only).
@@ -154,36 +163,36 @@ GUI option: run `lusrmgr.msc` (Pro/Enterprise only).
 
 ---
 
-## Step 4 — Policies
+## Step 4: Policies
 
 Open `secpol.msc` (Local Security Policy).
 
-- [ ] **Account Policies → Password Policy:** match the README. If it gives nothing, the script's values are fine.
-- [ ] **Account Policies → Account Lockout Policy:** match the README.
-- [ ] **Local Policies → User Rights Assignment.** Check who's listed for:
+- [ ] **Account Policies > Password Policy:** match the README. If it gives nothing, the script's values are fine.
+- [ ] **Account Policies > Account Lockout Policy:** match the README.
+- [ ] **Local Policies > User Rights Assignment.** Check who's listed for:
   - Access this computer from the network
   - Allow log on through Remote Desktop Services
-  - Act as part of the operating system → should be **empty**
-  - Debug programs → **Administrators** only
-  - Back up / restore files and directories → **Administrators** (and Backup Operators)
+  - Act as part of the operating system: should be **empty**
+  - Debug programs: **Administrators** only
+  - Back up / restore files and directories: **Administrators** (and Backup Operators)
 
   Remove `Everyone`, `Guest`, or unauthorized users from these.
 
-- [ ] **Local Policies → Security Options.** Common ones:
-  - Accounts: Rename administrator / guest account → only if README asks
-  - Interactive logon: Do not display last user name → **Enabled**
-  - Network security: LAN Manager authentication level → **Send NTLMv2 response only. Refuse LM & NTLM**
-  - Network access: Do not allow anonymous enumeration of SAM accounts and shares → **Enabled**
+- [ ] **Local Policies > Security Options.** Common ones:
+  - Accounts: Rename administrator / guest account (only if README asks)
+  - Interactive logon: Do not display last user name. Set to **Enabled**.
+  - Network security: LAN Manager authentication level. Set to **Send NTLMv2 response only. Refuse LM & NTLM**.
+  - Network access: Do not allow anonymous enumeration of SAM accounts and shares. Set to **Enabled**.
 
   Don't change one that would break something the README needs.
 
 ---
 
-## Step 5 — Apps, services and files
+## Step 5: Apps, services and files
 
 ### Software
 
-- [ ] **Install Windows updates:** Settings → **Windows Update** → Check for updates. Repeat until nothing is left.
+- [ ] **Install Windows updates:** Settings > **Windows Update** > Check for updates. Repeat until nothing is left.
 - [ ] **Update required apps** (Firefox, Chrome, Notepad++, etc.) from inside each app or its website.
 - [ ] **Uninstall prohibited apps** (hacking tools, games, "cleaners", scareware): run `appwiz.cpl`. Check forensics first.
 - [ ] **Turn off unneeded Windows features:** run `optionalfeatures.exe` and untick, if not required:
@@ -226,21 +235,21 @@ Open `secpol.msc` (Local Security Policy).
 Check each place. Remove anything malicious; leave anything you don't understand and ask.
 
 - [ ] **Scheduled tasks:** run `taskschd.msc`, look for tasks running scripts or programs from user folders.
-- [ ] **Startup apps:** Task Manager → **Startup** tab.
+- [ ] **Startup apps:** Task Manager > **Startup** tab.
 - [ ] **Startup folders:** press Win+R, run `shell:startup`, then `shell:common startup`.
-- [ ] **Hosts file:** `notepad C:\Windows\System32\drivers\etc\hosts` — no redirects for real websites.
-- [ ] **Remote-control software** (TeamViewer, VNC, AnyDesk, etc.) that the README doesn't need → uninstall.
+- [ ] **Hosts file:** open `notepad C:\Windows\System32\drivers\etc\hosts`. Check for redirects for real websites.
+- [ ] **Uninstall remote-control software** (TeamViewer, VNC, AnyDesk, etc.) that the README doesn't need.
 - [ ] **Run a Defender scan:**
 
   ```powershell
   Start-MpScan -ScanType QuickScan
   ```
 
-  Then check Windows Security → Virus & threat protection → **Exclusions** and remove ones that look wrong.
+  Then check Windows Security > Virus & threat protection > **Exclusions** and remove ones that look wrong.
 
 ---
 
-## Step 6 — Finish
+## Step 6: Finish
 
 - [ ] **Re-run the audit** and compare it to the first one: `.\windows.ps1`
 - [ ] **Authorized users can still log in.**

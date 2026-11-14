@@ -4,26 +4,37 @@ Work top to bottom. Tick a box only after you've checked it on **this** image.
 Built for Server 2016 / 2019 / 2022 (standalone or domain member). Server 2008 isn't supported.
 
 > **Three rules that save you from penalties**
-> 1. **The README decides.** Servers run roles (web, file, DNS…) on purpose. Installed ≠ forbidden.
+> 1. **The README decides.** Servers run roles (web, file, DNS, etc.) on purpose. Installed does not mean forbidden.
 > 2. **Forensics first.** Answer every forensic question before deleting anything.
 > 3. **Never lock yourself out.** Keep the VM console and at least one other working admin.
 
 ---
 
-## Step 1 — Get ready
+## Step 1: Get ready
 
 - [ ] **Take a VM snapshot.**
 - [ ] **Write down the starting score and Windows version** (run `winver`).
-- [ ] **Find out if this is a domain controller:** Server Manager → Local Server. If **Active Directory Domain Services** is installed, it's a DC → the script only audits. Skip Step 2 and do everything by hand.
-- [ ] **Open the right PowerShell:** Start → type `Windows PowerShell` → right-click → **Run as administrator**.
-- [ ] **Go to the scripts folder** and allow scripts for this window only. `windows.ps1` must be in the same folder.
+- [ ] **Find out if this is a domain controller:** open Server Manager > Local Server and check the server's role. On a DC, the script only audits. Skip Step 2 and make changes by hand.
+- [ ] **Open Windows PowerShell as administrator:** open Start, type `Windows PowerShell`, right-click it, and select **Run as administrator**.
+- [ ] **Download both scripts from GitHub.** No Git or clone is needed. Keep both files in the same folder:
 
   ```powershell
-  cd PATH\TO\scripts
+  New-Item -ItemType Directory -Force -Path "$HOME\cyberpatriot-scripts" | Out-Null
+  Set-Location "$HOME\cyberpatriot-scripts"
+  $base = 'https://raw.githubusercontent.com/pranavgundu/cyberpatriot/main/scripts'
+  Invoke-WebRequest -UseBasicParsing -Uri "$base/windows.ps1" -OutFile windows.ps1
+  Invoke-WebRequest -UseBasicParsing -Uri "$base/windows-server.ps1" -OutFile windows-server.ps1
+  ```
+
+  If a download returns `404`, use the [private repository download instructions](README.md#private-repository-downloads) instead. Review both files before running them as administrator. Use this folder for all script commands below.
+
+- [ ] **Allow scripts for this PowerShell window only:**
+
+  ```powershell
   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
   ```
 
-- [ ] **Run the audit script.** It only reads — nothing changes.
+- [ ] **Run the audit script.** It reads system settings and saves a report without changing those settings.
 
   ```powershell
   .\windows-server.ps1
@@ -33,7 +44,7 @@ Built for Server 2016 / 2019 / 2022 (standalone or domain member). Server 2008 i
 
 - [ ] **Read the README and write down:**
   - every authorized user, and which ones are admins
-  - required **roles** (file server, IIS, FTP, DNS, DHCP, database, print…)
+  - required **roles** (file server, IIS, FTP, DNS, DHCP, database, printing, etc.)
   - required open ports (see the table below)
   - service accounts that must keep working
   - any special tasks
@@ -53,7 +64,7 @@ Built for Server 2016 / 2019 / 2022 (standalone or domain member). Server 2008 i
 
 ---
 
-## Step 2 — Let the script do the easy fixes
+## Step 2: Run the script fixes
 
 Skip this step on a domain controller.
 
@@ -74,26 +85,26 @@ Then run it **a few modules at a time**, checking the score and roles after each
 
 **How to answer each prompt:**
 
-| Module | Type `YES` when… | Skip when… |
+| Module | Type `YES` when | Skip when |
 |---|---|---|
 | `Base` | Almost always | README needs auto-login or Remote Assistance |
-| `Passwords` | README gives no specific values | README gives different values → set them in `secpol.msc` |
+| `Passwords` | README gives no specific values | README gives different values; set them in `secpol.msc` |
 | `Firewall` | You're at the VM console. Enter **every** port your roles need (table above) | You're connected over Remote Desktop |
 | `Defender` | No other antivirus is required | README requires a different antivirus |
-| `RDP` — 1st prompt (NLA) | Always | — |
-| `RDP` — 2nd prompt (disable RDP) | README does **not** need Remote Desktop | README needs Remote Desktop (most servers do) |
+| `RDP`, first prompt (NLA) | Always | No usual reason to skip |
+| `RDP`, second prompt (disable RDP) | README does **not** need Remote Desktop | README needs Remote Desktop (most servers do) |
 | `SMB` | No old clients need SMB1 | README mentions old devices / SMB1 |
-| `Audit` | Always | — |
-| `Updates` | Always | — |
+| `Audit` | Always | No usual reason to skip |
+| `Updates` | Always | No usual reason to skip |
 | `Users` | Guest prompt: yes. Then type **one** unauthorized user to disable | Blank to skip |
 | `Services` | Type **one** forbidden service from the list | It belongs to a required role (e.g. `W3SVC` for IIS, `Spooler` for printing) |
 
-- [ ] **Read the end of each run.** Any `FAILED` warning is **not** done — fix it by hand.
+- [ ] **Read the end of each run.** Any `FAILED` warning is **not** done. Fix it by hand.
 - [ ] **After each run, check the score** and that every required role still works.
 
 ---
 
-## Step 3 — Users and groups
+## Step 3: Users and groups
 
 Goal: the accounts on the machine match the README **exactly**.
 On a domain controller, use **`dsa.msc`** (Active Directory Users and Computers) instead of the commands below.
@@ -105,7 +116,7 @@ On a domain controller, use **`dsa.msc`** (Active Directory Users and Computers)
   Remove-LocalUser -Name USERNAME
   ```
 
-  Don't delete a **service account** that a role runs as — check `services.msc` → Log On As column first.
+  Don't delete a **service account** that a role runs as. Check the Log On As column in `services.msc` first.
 
 - [ ] **List admins:** `Get-LocalGroupMember -Group Administrators`
 - [ ] **Remove admin from users who shouldn't have it:**
@@ -142,25 +153,25 @@ On a domain controller, use **`dsa.msc`** (Active Directory Users and Computers)
 
 ---
 
-## Step 4 — Policies
+## Step 4: Policies
 
-Open `secpol.msc`. On a domain controller or domain member, also check `gpmc.msc` — domain policy overrides local policy.
+Open `secpol.msc`. On a domain controller or domain member, also check `gpmc.msc`. Domain policy overrides local policy.
 
-- [ ] **Account Policies → Password Policy / Account Lockout Policy:** match the README.
-- [ ] **Local Policies → User Rights Assignment.** Check who's listed for:
+- [ ] **Account Policies > Password Policy / Account Lockout Policy:** match the README.
+- [ ] **Local Policies > User Rights Assignment.** Check who's listed for:
   - Allow log on through Remote Desktop Services
-  - Log on as a service / Log on as a batch job — **keep** role service accounts here
-  - Act as part of the operating system → should be **empty**
-  - Debug programs → **Administrators** only
+  - Log on as a service / Log on as a batch job: **keep** role service accounts here
+  - Act as part of the operating system: should be **empty**
+  - Debug programs: **Administrators** only
 
   Remove `Everyone`, `Guest`, or unauthorized users. Don't add broad "Deny" rules.
 
-- [ ] **Local Policies → Security Options:** same as Windows 10 (don't show last user name, NTLMv2 only, no anonymous SAM enumeration). Check that required clients still connect afterward.
+- [ ] **Local Policies > Security Options:** same as Windows 10 (don't show last user name, NTLMv2 only, no anonymous SAM enumeration). Check that required clients still connect afterward.
 - [ ] **Check what policy is actually applied:** `gpresult /r`
 
 ---
 
-## Step 5 — Roles (don't skip this)
+## Step 5: Roles (don't skip this)
 
 - [ ] **List installed roles:**
 
@@ -168,32 +179,32 @@ Open `secpol.msc`. On a domain controller or domain member, also check `gpmc.msc
   Get-WindowsFeature | Where-Object Installed
   ```
 
-- [ ] **Remove roles the README doesn't need** via Server Manager → Manage → Remove Roles and Features.
+- [ ] **Remove roles the README doesn't need** via Server Manager > Manage > Remove Roles and Features.
 
 For each role you **keep**, go through its box:
 
-- [ ] **File server:** for each share, check share permissions **and** NTFS permissions (right-click folder → Properties → Security). No `Everyone` full control. No guest/anonymous access. Test with a normal user.
+- [ ] **File server:** for each share, check share permissions **and** NTFS permissions (right-click folder > Properties > Security). No `Everyone` full control. No guest/anonymous access. Test with a normal user.
 - [ ] **IIS (web):** open `inetmgr`. Turn off Directory Browsing. Remove default/sample sites if not needed. Check authentication (no anonymous on admin pages) and HTTPS bindings.
 - [ ] **FTP:** in `inetmgr`, turn off anonymous authentication, require SSL if possible, check which folders are exposed.
 - [ ] **DNS:** open `dnsmgmt.msc`. Turn off zone transfers or limit them to listed servers. Check forwarders.
 - [ ] **DHCP:** open `dhcpmgmt.msc`. Check scopes and that it only serves the right network.
 - [ ] **Database (SQL Server, MySQL):** strong `sa`/root password, no blank passwords, remote access only if needed, update it.
 - [ ] **Print server:** keep the Spooler running; remove unknown printers/drivers.
-- [ ] **Domain controller:** password policy in `gpmc.msc` → Default Domain Policy; check Domain Admins / Enterprise Admins / Schema Admins membership in `dsa.msc`.
+- [ ] **Domain controller:** check password policy in `gpmc.msc` > Default Domain Policy; check Domain Admins / Enterprise Admins / Schema Admins membership in `dsa.msc`.
 
 ---
 
-## Step 6 — Apps, services and files
+## Step 6: Apps, services and files
 
 ### Software
 
-- [ ] **Install Windows updates:** Settings → **Windows Update** → Check for updates (or `sconfig` → option 6 on Server Core). Repeat until nothing is left.
+- [ ] **Install Windows updates:** Settings > **Windows Update** > Check for updates (or `sconfig` > option 6 on Server Core). Repeat until nothing is left.
 - [ ] **Update required apps** (browsers, runtimes, role software).
 - [ ] **Uninstall prohibited apps:** run `appwiz.cpl`. Check forensics first.
 
 ### Services
 
-- [ ] **Open `services.msc`.** Stop and disable services that **no required role** needs (Telnet, Remote Registry, SNMP, SSDP, UPnP…).
+- [ ] **Open `services.msc`.** Stop and disable services that **no required role** needs (Telnet, Remote Registry, SNMP, SSDP, UPnP, etc.).
 - [ ] **Don't touch** networking, DNS Client, Firewall, Defender, Windows Update, the scoring service, or anything a required role uses.
 - [ ] **Look for odd services:** strange names, or a path pointing at a user folder or `Temp`.
 
@@ -213,18 +224,18 @@ For each role you **keep**, go through its box:
 
 ### Backdoors
 
-- [ ] **Scheduled tasks:** `taskschd.msc` — tasks running scripts from user folders or `Temp`.
-- [ ] **Startup:** Task Manager → Startup, `shell:startup`, `shell:common startup`.
+- [ ] **Scheduled tasks:** open `taskschd.msc` and look for tasks running scripts from user folders or `Temp`.
+- [ ] **Startup:** Task Manager > Startup, `shell:startup`, `shell:common startup`.
 - [ ] **Hosts file:** `notepad C:\Windows\System32\drivers\etc\hosts`
-- [ ] **Remote-control software** (TeamViewer, VNC, AnyDesk…) the README doesn't need → uninstall.
+- [ ] **Uninstall remote-control software** (TeamViewer, VNC, AnyDesk, etc.) the README doesn't need.
 - [ ] **Run a Defender scan:** `Start-MpScan -ScanType QuickScan`, then check Exclusions in Windows Security.
 
 ---
 
-## Step 7 — Finish
+## Step 7: Finish
 
 - [ ] **Re-run the audit** and compare: `.\windows-server.ps1`
-- [ ] **Test every required role from a client**, not just the server itself (open the website, the share, a DNS lookup…).
+- [ ] **Test every required role from a client**, not just the server itself (open the website or share, run a DNS lookup, etc.).
 - [ ] **Test a new Remote Desktop session** before closing the current one.
 - [ ] **Authorized users and service accounts still log in.**
 - [ ] **Forensic answers are saved.**
